@@ -1,24 +1,25 @@
-# MZinga Lab 2: REST API & Event-Driven Worker
+# MZinga Lab 3: Observability with OpenTelemetry
 
-Welcome to the second part of the MZinga Email Worker Lab! In this stage, we evolve our architecture from direct database coupling to more robust integration patterns: **REST API** and **Message Queues (RabbitMQ)**.
+Welcome to the third part of the MZinga Email Worker Lab! In this stage, we introduce **Observability** to our Python worker. We will implement the three pillars of observability—Logs, Metrics, and Traces—using OpenTelemetry, Prometheus, and Jaeger.
 
-## Architecture Evolution
+## 🔭 The Three Pillars of Observability
 
-- **State 2 (REST API):** The worker no longer accesses MongoDB directly. It communicates with MZinga exclusively via HTTP requests adhering to the published API contract.
-- **State 3 (Event-Driven):** Polling is removed. MZinga pushes tasks to the worker instantly using **RabbitMQ**, ensuring zero-latency processing.
+1. **Structured Logs:** Replaces plain text logs with JSON objects (using `structlog`).
+2. **Metrics:** Aggregated numeric measurements (e.g., `emails_processed_total`) exported to **Prometheus**.
+3. **Traces:** Distributed tracking showing time spent in each function, exported to **Jaeger**.
 
 ## 🚀 Step 0: Clone the Repository
 
 First, clone this repository to your local machine and open the folder:
 
 ```bash
-git clone https://github.com/SwDA-Team-15/lab2.git
-cd lab2
+git clone [https://github.com/SwDA-Team-15/lab3.git](https://github.com/SwDA-Team-15/lab3.git)
+cd lab3
 ```
 
 ## 🚀 Step 1: Start the Infrastructure
 
-Ensure Docker is running. We need the database and the message broker (RabbitMQ) active.
+In addition to our database and message broker, we now need observability tools.
 
 1. Navigate to the CMS folder:
 
@@ -26,57 +27,29 @@ Ensure Docker is running. We need the database and the message broker (RabbitMQ)
    cd mzinga-apps
    ```
 
-2. Start the services:
+2. **Crucial:** Ensure you have the `prometheus.yml` file in this folder to allow Prometheus to scrape metrics.
+
+3. Start all services:
 
    ```bash
-   docker compose up database messagebus cache -d
+   docker compose up database messagebus cache jaeger prometheus -d
    ```
 
-3. Run Mailhog:
+4. Run Mailhog (if not already running):
 
    ```bash
    docker run -d -p 1025:1025 -p 8025:8025 --name mailhog mailhog/mailhog
    ```
 
-### ⚠️ Troubleshooting: Database Authentication Errors
+## 🐍 Step 2: Setup the Python Worker
 
-If you encounter authentication errors (or MZinga fails to connect to the database), your Docker volumes might have stale credentials from previous lab sessions.
-To completely reset the database and start fresh, run:
-
-```bash
-docker compose down -v
-docker compose up database messagebus cache -d
-```
-
-*(Note: The `-v` flag deletes the database volumes, meaning you will need to register a new Admin user when you open the MZinga admin panel).*
-## ⚙️ Step 2: Configure MZinga
-
-To enable RabbitMQ notifications (only for **lab2-worker-events**), uncomment two lines in your `.env` file in the `mzinga-apps` folder:
-
-```bash
-RABBITMQ_URL=amqp://guest:guest@localhost/
-HOOKSURL_COMMUNICATIONS_AFTERCHANGE=rabbitmq
-```
-
-*Note: Restart MZinga after making changes (`npm run dev`).*
-
-## 🐍 Step 3: Setup the Python Worker
-
-Configure the environment for the new worker logic.
-
-1. Open a **new, separate terminal window** and navigate to the REST worker folder:
+1. Open a **new terminal window** and navigate to the worker folder:
 
    ```bash
    cd lab2-worker-rest
    ```
 
-   or, for the event-driven version:
-
-   ```bash
-   cd lab2-worker-events
-   ```
-
-2. Create and activate a virtual environment:
+2. Activate your virtual environment:
    - **Windows:**
 
      ```bash
@@ -91,29 +64,24 @@ Configure the environment for the new worker logic.
      source .venv/bin/activate
      ```
 
-3. Install the required Python libraries:
+3. **Configure Environment:** Ensure your `.env` contains:
+
+   ```env
+   OTEL_SERVICE_NAME=email-worker
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+   PROMETHEUS_PORT=8000 
+   ```
+
+4. Install dependencies and start:
 
    ```bash
    pip install -r requirements.txt
-   ```
-
-4. Start the worker:
-
-   ```bash
    python worker.py
    ```
 
-*Leave this terminal open! It will print out a message when it connects to the MZinga API or RabbitMQ.*
+## 🧪 Step 3: Test and Observe
 
-## 🧪 Step 4: Test the Flow
-
-Let's watch the decoupled systems work together:
-
-1. Open your browser and go to **<http://localhost:3000/admin>** and **<http://localhost:8025/>**
-2. **Log in as Admin.**
-3. Navigate to **Users** (you should already have one from Lab 1).
-4. Navigate to **Communications** and click **Create New**.
-5. Fill out the Subject, Body, and select your dummy user in the "To" field.
-6. Click **Save**.
-
-**The Result:** Watch your Python worker terminal! Within 5 seconds (or instantly for events), it will detect the new email, print the subject, and mark it as sent. If you refresh the page in your browser, you will see the status dropdown has automatically changed from **Pending** to **Sent**. You will also find the newly sent email in the Mailhog inbox at <http://localhost:8025/>.
+1. **Trigger:** Create a new email in MZinga Admin ([http://localhost:3000/admin](http://localhost:3000/admin)).
+2. **Logs:** Check your terminal for JSON formatted logs.
+3. **Traces:** Open **Jaeger** at [http://localhost:16686](http://localhost:16686). Select `email-worker` service to see the "waterfall" of your function calls.
+4. **Metrics:** Open **Prometheus** at [http://localhost:9090](http://localhost:9090). Query `emails_processed_total` and check the **Graph** tab.
