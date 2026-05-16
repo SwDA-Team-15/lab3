@@ -46,7 +46,7 @@ In addition to our database and message broker, we now need observability tools.
 1. Open a **new terminal window** and navigate to the worker folder:
 
    ```bash
-   cd lab2-worker-rest
+   cd lab3-worker-observable
    ```
 
 2. Activate your virtual environment:
